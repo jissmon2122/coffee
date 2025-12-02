@@ -174,8 +174,16 @@ export async function sendOrderConfirmationEmail(order: OrderDetails): Promise<{
   try {
     const { client, fromEmail } = await getUncachableResendClient();
     
+    // Use Resend's test address if no verified domain is configured
+    // Note: With onboarding@resend.dev, emails can only be sent to the Resend account owner's email
+    const senderEmail = fromEmail && !fromEmail.includes('gmail.com') && !fromEmail.includes('yahoo.com') && !fromEmail.includes('hotmail.com')
+      ? fromEmail 
+      : 'Brew Haven <onboarding@resend.dev>';
+    
+    console.log('Sending email from:', senderEmail, 'to:', order.customerEmail);
+    
     const result = await client.emails.send({
-      from: fromEmail || 'Brew Haven <onboarding@resend.dev>',
+      from: senderEmail,
       to: order.customerEmail,
       subject: `Order Confirmed - ${order.orderNumber} | Brew Haven`,
       html: generateOrderEmailHtml(order),
