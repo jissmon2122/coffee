@@ -30,7 +30,7 @@ export default function OrderConfirmation({
             Order Confirmed!
           </h1>
           <p className="text-muted-foreground mb-6">
-            Your order has been received and is being prepared.
+            Your order has been received and is being prepared. A confirmation email has been sent to your inbox.
           </p>
 
           <div className="bg-muted rounded-lg p-4 mb-6">
@@ -46,7 +46,7 @@ export default function OrderConfirmation({
           <div className="flex items-center justify-center gap-2 text-muted-foreground mb-8">
             <Clock className="w-5 h-5" />
             <span data-testid="text-pickup-time">
-              {pickupTime || "Ready in 15-20 minutes"}
+              {pickupTime ? `Ready by ${pickupTime}` : "Ready in 15-20 minutes"}
             </span>
           </div>
 

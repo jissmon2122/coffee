@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowLeft, Clock, User, Phone, MessageSquare, CheckCircle } from "lucide-react";
+import { ArrowLeft, Clock, User, Phone, Mail, MessageSquare, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,10 +15,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { useCart } from "@/lib/cart-context";
 import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 
 interface CheckoutFormProps {
   onBack: () => void;
-  onOrderComplete: (orderNumber: string) => void;
+  onOrderComplete: (orderNumber: string, pickupTime: string) => void;
 }
 
 const generatePickupTimes = () => {
@@ -50,6 +51,7 @@ export default function CheckoutForm({ onBack, onOrderComplete }: CheckoutFormPr
   const { toast } = useToast();
   
   const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [pickupTime, setPickupTime] = useState("");
   const [specialInstructions, setSpecialInstructions] = useState("");
@@ -64,6 +66,10 @@ export default function CheckoutForm({ onBack, onOrderComplete }: CheckoutFormPr
       toast({ title: "Please enter your name", variant: "destructive" });
       return;
     }
+    if (!email.trim() || !email.includes("@")) {
+      toast({ title: "Please enter a valid email address", variant: "destructive" });
+      return;
+    }
     if (!phone.trim()) {
       toast({ title: "Please enter your phone number", variant: "destructive" });
       return;
@@ -75,12 +81,52 @@ export default function CheckoutForm({ onBack, onOrderComplete }: CheckoutFormPr
 
     setIsSubmitting(true);
     
-    // todo: remove mock functionality - replace with real order submission
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    
-    const orderNumber = `BH${Date.now().toString().slice(-6)}`;
-    clearCart();
-    onOrderComplete(orderNumber);
+    try {
+      const orderData = {
+        customerName: name.trim(),
+        customerEmail: email.trim(),
+        customerPhone: phone.trim(),
+        pickupTime,
+        specialInstructions: specialInstructions.trim() || undefined,
+        items: items.map(item => ({
+          productId: item.productId,
+          name: item.name,
+          quantity: item.quantity,
+          customization: item.customization,
+          totalPrice: item.totalPrice,
+        })),
+        subtotal,
+        tax,
+        total,
+      };
+
+      const response = await apiRequest("POST", "/api/orders", orderData);
+      const result = await response.json();
+
+      if (result.emailSent) {
+        toast({ 
+          title: "Order confirmed!", 
+          description: "A confirmation email has been sent to your inbox." 
+        });
+      } else {
+        toast({ 
+          title: "Order confirmed!", 
+          description: "Your order is being prepared." 
+        });
+      }
+
+      clearCart();
+      onOrderComplete(result.order.orderNumber, pickupTime);
+    } catch (error) {
+      console.error("Order submission error:", error);
+      toast({ 
+        title: "Failed to place order", 
+        description: "Please try again.",
+        variant: "destructive" 
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const formatCustomization = (item: typeof items[0]) => {
@@ -132,6 +178,24 @@ export default function CheckoutForm({ onBack, onOrderComplete }: CheckoutFormPr
                     onChange={(e) => setName(e.target.value)}
                     data-testid="input-checkout-name"
                   />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email Address</Label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="your@email.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="pl-10"
+                      data-testid="input-checkout-email"
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    We'll send your order confirmation to this email
+                  </p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="phone">Phone Number</Label>

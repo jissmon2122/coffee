@@ -24,6 +24,7 @@ export default function Home({ isDarkMode, onToggleDarkMode }: HomeProps) {
   const [selectedProduct, setSelectedProduct] = useState<MenuItem | null>(null);
   const [currentView, setCurrentView] = useState<AppView>("menu");
   const [orderNumber, setOrderNumber] = useState("");
+  const [orderPickupTime, setOrderPickupTime] = useState("");
   
   const { addItem } = useCart();
   const menuRef = useRef<HTMLDivElement>(null);
@@ -75,14 +76,16 @@ export default function Home({ isDarkMode, onToggleDarkMode }: HomeProps) {
     });
   };
 
-  const handleOrderComplete = (orderNum: string) => {
+  const handleOrderComplete = (orderNum: string, pickupTime: string) => {
     setOrderNumber(orderNum);
+    setOrderPickupTime(pickupTime);
     setCurrentView("confirmation");
   };
 
   const handleBackToMenu = () => {
     setCurrentView("menu");
     setOrderNumber("");
+    setOrderPickupTime("");
   };
 
   if (currentView === "checkout") {
@@ -98,6 +101,7 @@ export default function Home({ isDarkMode, onToggleDarkMode }: HomeProps) {
     return (
       <OrderConfirmation
         orderNumber={orderNumber}
+        pickupTime={orderPickupTime}
         onViewMenu={handleBackToMenu}
         onOrderAgain={handleBackToMenu}
       />
