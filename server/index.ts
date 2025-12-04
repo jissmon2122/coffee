@@ -77,6 +77,11 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Basic health check endpoint for host health probes
+  app.get('/healthz', (_req, res) => {
+    res.status(200).json({ status: 'ok', uptime: process.uptime() });
+  });
+
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
