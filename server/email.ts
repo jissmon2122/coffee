@@ -1,9 +1,13 @@
-// Resend integration for sending order confirmation emails
+// Email integration for sending order confirmation emails
+// Supports both Resend and Gmail SMTP
+
 import { Resend } from 'resend';
+import nodemailer from 'nodemailer';
 
 let connectionSettings: any;
+let gmailTransporter: nodemailer.Transporter | null = null;
 
-async function getCredentials() {
+async function getResendCredentials() {
   const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
   const xReplitToken = process.env.REPL_IDENTITY 
     ? 'repl ' + process.env.REPL_IDENTITY 
@@ -31,12 +35,41 @@ async function getCredentials() {
   return { apiKey: connectionSettings.settings.api_key, fromEmail: connectionSettings.settings.from_email };
 }
 
+function getGmailTransporter() {
+  if (gmailTransporter) return gmailTransporter;
+  
+  const gmailUser = process.env.GMAIL_USER;
+  const gmailPassword = process.env.GMAIL_PASSWORD;
+  
+  if (!gmailUser || !gmailPassword) {
+    throw new Error('Gmail credentials not configured (GMAIL_USER and GMAIL_PASSWORD)');
+  }
+  
+  gmailTransporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: gmailUser,
+      pass: gmailPassword
+    }
+  });
+  
+  return gmailTransporter;
+}
+
 export async function getUncachableResendClient() {
-  const { apiKey, fromEmail } = await getCredentials();
+  const { apiKey, fromEmail } = await getResendCredentials();
   return {
     client: new Resend(apiKey),
     fromEmail
   };
+}
+
+export function getEmailProvider() {
+  // Check which email provider is configured
+  if (process.env.GMAIL_USER && process.env.GMAIL_PASSWORD) {
+    return 'gmail';
+  }
+  return 'resend';
 }
 
 interface OrderItem {
@@ -172,6 +205,21 @@ function generateOrderEmailHtml(order: OrderDetails): string {
 
 export async function sendOrderConfirmationEmail(order: OrderDetails): Promise<{ success: boolean; error?: string }> {
   try {
+    const provider = getEmailProvider();
+    
+    if (provider === 'gmail') {
+      return await sendViaGmail(order);
+    } else {
+      return await sendViaResend(order);
+    }
+  } catch (error) {
+    console.error('Failed to send order confirmation email:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
+}
+
+async function sendViaResend(order: OrderDetails): Promise<{ success: boolean; error?: string }> {
+  try {
     const { client, fromEmail } = await getUncachableResendClient();
     
     // Use Resend's test address if no verified domain is configured
@@ -180,7 +228,7 @@ export async function sendOrderConfirmationEmail(order: OrderDetails): Promise<{
       ? fromEmail 
       : 'Brew Haven <onboarding@resend.dev>';
     
-    console.log('Sending email from:', senderEmail, 'to:', order.customerEmail);
+    console.log('[RESEND] Sending email from:', senderEmail, 'to:', order.customerEmail);
     
     const result = await client.emails.send({
       from: senderEmail,
@@ -190,14 +238,38 @@ export async function sendOrderConfirmationEmail(order: OrderDetails): Promise<{
     });
 
     if (result.error) {
-      console.error('Email send error:', result.error);
+      console.error('[RESEND] Email send error:', result.error);
       return { success: false, error: result.error.message };
     }
 
-    console.log('Order confirmation email sent:', result.data?.id);
+    console.log('[RESEND] Order confirmation email sent:', result.data?.id);
     return { success: true };
   } catch (error) {
-    console.error('Failed to send order confirmation email:', error);
+    console.error('[RESEND] Failed to send email:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
+}
+
+async function sendViaGmail(order: OrderDetails): Promise<{ success: boolean; error?: string }> {
+  try {
+    const transporter = getGmailTransporter();
+    const gmailUser = process.env.GMAIL_USER!;
+    
+    console.log('[GMAIL] Sending email from:', gmailUser, 'to:', order.customerEmail);
+    
+    const mailOptions = {
+      from: `Brew Haven <${gmailUser}>`,
+      to: order.customerEmail,
+      subject: `Order Confirmed - ${order.orderNumber} | Brew Haven`,
+      html: generateOrderEmailHtml(order),
+    };
+    
+    const info = await transporter.sendMail(mailOptions);
+    
+    console.log('[GMAIL] Order confirmation email sent:', info.messageId);
+    return { success: true };
+  } catch (error) {
+    console.error('[GMAIL] Failed to send email:', error);
     return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 }

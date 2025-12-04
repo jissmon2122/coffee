@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { createOrderSchema } from "@shared/schema";
 import { sendOrderConfirmationEmail } from "./email";
+import { sendOrderConfirmationSms } from "./sms";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -49,9 +50,33 @@ export async function registerRoutes(
         console.warn("Email sending failed but order was created:", emailResult.error);
       }
 
+      // Send confirmation SMS
+      const smsResult = await sendOrderConfirmationSms({
+        orderNumber: order.orderNumber,
+        customerName: order.customerName,
+        customerPhone: order.customerPhone,
+        pickupTime: order.pickupTime,
+        items: order.items.map(item => ({
+          name: item.name,
+          quantity: item.quantity,
+          customization: {
+            size: item.customization.size,
+            milk: item.customization.milk,
+            extras: item.customization.extras,
+          },
+          totalPrice: item.totalPrice,
+        })),
+        total: order.total,
+      });
+
+      if (!smsResult.success) {
+        console.warn("SMS sending failed but order was created:", smsResult.error);
+      }
+
       return res.status(201).json({ 
         order,
         emailSent: emailResult.success,
+        smsSent: smsResult.success,
       });
     } catch (error) {
       console.error("Error creating order:", error);
